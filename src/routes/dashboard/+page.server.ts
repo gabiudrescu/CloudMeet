@@ -42,16 +42,16 @@ export const load: PageServerLoad = async (event) => {
 			is_active: number;
 		}>();
 
-	// Get recent bookings
+	// Get upcoming bookings (only future meetings)
 	const recentBookings = await db
 		.prepare(
 			`SELECT b.id, b.start_time, b.end_time, b.attendee_name, b.attendee_email,
 				b.status, b.created_at, b.attendee_notes, b.canceled_by, b.cancellation_reason,
-				et.name as event_type_name
+				b.event_type_id, et.name as event_type_name, et.slug as event_type_slug, et.duration_minutes
 			FROM bookings b
 			JOIN event_types et ON b.event_type_id = et.id
-			WHERE b.user_id = ?
-			ORDER BY b.start_time DESC
+			WHERE b.user_id = ? AND b.start_time >= datetime('now')
+			ORDER BY b.created_at DESC
 			LIMIT 20`
 		)
 		.bind(userId)
@@ -64,6 +64,9 @@ export const load: PageServerLoad = async (event) => {
 			status: string;
 			created_at: string;
 			event_type_name: string;
+			event_type_slug: string;
+			event_type_id: string;
+			duration_minutes: number;
 			attendee_notes: string | null;
 			canceled_by: string | null;
 			cancellation_reason: string | null;

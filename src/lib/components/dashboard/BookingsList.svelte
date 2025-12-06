@@ -4,9 +4,13 @@
 	interface Booking {
 		id: string;
 		event_type_name: string;
+		event_type_slug: string;
+		event_type_id: string;
+		duration_minutes: number;
 		attendee_name: string;
 		attendee_email: string;
 		start_time: string;
+		end_time: string;
 		status: string;
 		attendee_notes?: string | null;
 		canceled_by?: string | null;
@@ -16,22 +20,23 @@
 	interface Props {
 		bookings: Booking[];
 		onCancelClick: (bookingId: string) => void;
+		onRescheduleClick: (bookingId: string) => void;
 	}
 
-	let { bookings, onCancelClick }: Props = $props();
+	let { bookings, onCancelClick, onRescheduleClick }: Props = $props();
 
 	const { formatCompactDateTime } = createFormatters();
 
-	let sortOrder = $state<'recent' | 'upcoming'>('recent');
+	let sortOrder = $state<'last_booked' | 'upcoming'>('last_booked');
 
 	const sortedBookings = $derived(() => {
 		if (!bookings) return [];
 		const sorted = [...bookings];
 		if (sortOrder === 'upcoming') {
-			// Sort by start_time ascending, showing future meetings first
+			// Sort by start_time ascending, showing soonest meeting first
 			sorted.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
 		}
-		// 'recent' keeps the default order (already sorted by start_time DESC from server)
+		// 'last_booked' keeps the default order (already sorted by created_at DESC from server)
 		return sorted;
 	});
 
@@ -51,18 +56,18 @@
 
 <div>
 	<div class="flex justify-between items-center mb-4">
-		<h2 class="text-xl font-bold text-gray-900">Recent Bookings</h2>
+		<h2 class="text-xl font-bold text-gray-900">Upcoming Bookings</h2>
 		<select
 			bind:value={sortOrder}
 			class="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
 		>
-			<option value="recent">Last booked</option>
+			<option value="last_booked">Last booked</option>
 			<option value="upcoming">Upcoming first</option>
 		</select>
 	</div>
 
 	<div class="space-y-4">
-		{#if sortedBookings() && sortedBookings().length > 0}
+		{#if sortedBookings().length > 0}
 			{#each sortedBookings() as booking}
 				<div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
 					<div class="flex justify-between items-start mb-2">
@@ -76,6 +81,12 @@
 								{booking.status}
 							</span>
 							{#if booking.status === 'confirmed'}
+								<button
+									onclick={() => onRescheduleClick(booking.id)}
+									class="text-xs text-blue-600 hover:text-blue-700 font-medium"
+								>
+									Reschedule
+								</button>
 								<button
 									onclick={() => onCancelClick(booking.id)}
 									class="text-xs text-red-600 hover:text-red-700 font-medium"

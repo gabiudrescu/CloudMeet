@@ -42,7 +42,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				FROM bookings b
 				JOIN event_types e ON b.event_type_id = e.id
 				JOIN users u ON b.user_id = u.id
-				WHERE b.id = ? AND b.status = 'confirmed'`
+				WHERE b.id = ? AND b.status IN ('confirmed', 'rescheduled')`
 			)
 			.bind(bookingId)
 			.first<{
@@ -152,14 +152,15 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			// Continue without calendar event if there's an error
 		}
 
-		// Update the booking with new times (keeping attendee info)
+		// Update the booking with new times (keeping attendee info) and set status to confirmed
 		await db
 			.prepare(
 				`UPDATE bookings SET
 					start_time = ?,
 					end_time = ?,
 					google_event_id = ?,
-					meeting_url = ?
+					meeting_url = ?,
+					status = 'confirmed'
 				WHERE id = ?`
 			)
 			.bind(
@@ -169,6 +170,12 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				newMeetingUrl,
 				bookingId
 			)
+			.run();
+
+		// Mark any pending reschedule proposals for this booking as superseded
+		await db
+			.prepare(`UPDATE reschedule_proposals SET status = 'counter_proposed', responded_at = CURRENT_TIMESTAMP WHERE booking_id = ? AND status = 'pending'`)
+			.bind(bookingId)
 			.run();
 
 		// Cancel any old scheduled reminder emails and create new ones
