@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { PageData } from './$types';
-	import { ProfileSection, CancelBookingModal, BookingsList, EventTypesList } from '$lib/components/dashboard';
+	import { ProfileSection, CancelBookingModal, HostRescheduleModal, BookingsList, EventTypesList } from '$lib/components/dashboard';
 
 	let { data }: { data: PageData } = $props();
 
@@ -11,6 +11,10 @@
 	let cancellingBookingId = $state<string | null>(null);
 	let showCancelModal = $state(false);
 	let cancelSuccess = $state('');
+
+	// Reschedule booking state
+	let reschedulingBookingId = $state<string | null>(null);
+	let rescheduleSuccess = $state('');
 
 	function openCancelModal(bookingId: string) {
 		cancellingBookingId = bookingId;
@@ -54,6 +58,44 @@
 	function getBookingById(bookingId: string | null) {
 		if (!bookingId) return null;
 		return bookings.find(b => b.id === bookingId) || null;
+	}
+
+	// Reschedule functions
+	function openRescheduleModal(bookingId: string) {
+		reschedulingBookingId = bookingId;
+	}
+
+	function closeRescheduleModal() {
+		reschedulingBookingId = null;
+	}
+
+	async function submitRescheduleProposal(bookingId: string, newStartTime: string, newEndTime: string, message: string) {
+		const response = await fetch('/api/bookings/propose-reschedule', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				bookingId,
+				proposedStartTime: newStartTime,
+				proposedEndTime: newEndTime,
+				message: message || null
+			})
+		});
+
+		if (!response.ok) {
+			const errData = await response.json() as { message?: string };
+			throw new Error(errData.message || 'Failed to send reschedule proposal');
+		}
+
+		// Update local state - mark as pending reschedule
+		bookings = bookings.map(b =>
+			b.id === bookingId
+				? { ...b, status: 'rescheduled' }
+				: b
+		);
+
+		rescheduleSuccess = 'Reschedule proposal sent to attendee';
+		closeRescheduleModal();
+		setTimeout(() => rescheduleSuccess = '', 3000);
 	}
 </script>
 
@@ -117,9 +159,9 @@
 			</div>
 		</div>
 
-		{#if cancelSuccess}
+		{#if cancelSuccess || rescheduleSuccess}
 			<div class="bg-green-50 border border-green-200 text-green-800 rounded-lg p-3 text-sm mb-4">
-				{cancelSuccess}
+				{cancelSuccess || rescheduleSuccess}
 			</div>
 		{/if}
 
@@ -128,7 +170,7 @@
 			<EventTypesList eventTypes={data.eventTypes || []} />
 
 			<!-- Recent Bookings -->
-			<BookingsList {bookings} onCancelClick={openCancelModal} />
+			<BookingsList {bookings} onCancelClick={openCancelModal} onRescheduleClick={openRescheduleModal} />
 		</div>
 	</main>
 </div>
@@ -139,4 +181,11 @@
 	show={showCancelModal}
 	onClose={closeCancelModal}
 	onCancel={cancelBooking}
+/>
+
+<!-- Host Reschedule Modal -->
+<HostRescheduleModal
+	booking={getBookingById(reschedulingBookingId)}
+	onClose={closeRescheduleModal}
+	onSubmit={submitRescheduleProposal}
 />
